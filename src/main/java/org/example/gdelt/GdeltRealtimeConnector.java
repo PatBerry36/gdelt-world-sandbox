@@ -1,6 +1,5 @@
 package org.example.gdelt;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.scheduling.annotation.EnableScheduling;
@@ -30,22 +29,19 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 /**
- * Spring Boot app that polls GDELT's "lastupdate.txt" endpoint and streams
- * events from each newly published 15-minute events zip file.
+ * Spring Boot app that polls GDELT 3's "lastupdate.txt" endpoint and streams
+ * events from each newly published events zip file.
  */
 @SpringBootApplication
 @EnableScheduling
 public class GdeltRealtimeConnector {
-    private static final URI LAST_UPDATE_URI = URI.create("http://data.gdeltproject.org/gdeltv2/lastupdate.txt");
+    private static final URI LAST_UPDATE_URI = URI.create("http://data.gdeltproject.org/gdeltv3/lastupdate.txt");
     private static final Duration HTTP_TIMEOUT = Duration.ofSeconds(30);
     private static final DateTimeFormatter GDELT_DATE_ADDED_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
     private static final DateTimeFormatter OUTPUT_DATE_FORMAT = DateTimeFormatter.ofPattern("dd-MM-yy HH:mm:ss");
 
     private final HttpClient client;
     private final Set<String> processedFiles;
-
-    @Value("${gdelt.poll-interval-seconds:60}")
-    private long pollIntervalSeconds;
 
     public GdeltRealtimeConnector() {
         this.client = HttpClient.newBuilder()
@@ -58,7 +54,7 @@ public class GdeltRealtimeConnector {
         SpringApplication.run(GdeltRealtimeConnector.class, args);
     }
 
-    @Scheduled(initialDelayString = "1000", fixedDelayString = "#{${gdelt.poll-interval-seconds:60} * 1000}")
+    @Scheduled(initialDelayString = "1000", fixedDelay = 60_000)
     public void scheduledPoll() {
         safePoll();
     }
@@ -83,9 +79,8 @@ public class GdeltRealtimeConnector {
 
         URI zipUri = URI.create(zipPath);
         System.out.printf(Locale.ROOT,
-                "[%s] New event batch (poll every %ds): %s%n",
+                "[%s] New event batch (poll every 60s): %s%n",
                 Instant.now(),
-                pollIntervalSeconds,
                 zipUri);
 
         List<GdeltEvent> events = downloadAndParseEvents(zipUri);

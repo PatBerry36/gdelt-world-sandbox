@@ -1,7 +1,7 @@
 package org.example.gdelt;
 
 /**
- * Minimal representation of one row from GDELT 2.0 events export.
+ * Minimal representation of one row from GDELT 3 events export.
  */
 public record GdeltEvent(
         String globalEventId,
