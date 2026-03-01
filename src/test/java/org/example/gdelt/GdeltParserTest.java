@@ -11,7 +11,7 @@ class GdeltParserTest {
 
     @Test
     void parsesExpectedColumns() throws Exception {
-        String[] cols = new String[58];
+        String[] cols = new String[60];
         for (int i = 0; i < cols.length; i++) {
             cols[i] = "c" + i;
         }
@@ -19,6 +19,7 @@ class GdeltParserTest {
         cols[0] = "123";
         cols[1] = "20260101";
         cols[6] = "Actor One";
+        cols[59] = "20260101123045";
         cols[16] = "Actor Two";
         cols[26] = "042";
         cols[34] = "1.23";
@@ -32,6 +33,7 @@ class GdeltParserTest {
         GdeltEvent event = events.get(0);
         assertEquals("123", event.globalEventId());
         assertEquals("20260101", event.sqlDate());
+        assertEquals("20260101123045", event.dateAdded());
         assertEquals("Actor One", event.actor1Name());
         assertEquals("Actor Two", event.actor2Name());
         assertEquals("042", event.eventCode());

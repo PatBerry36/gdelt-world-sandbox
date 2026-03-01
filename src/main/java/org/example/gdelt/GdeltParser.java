@@ -19,6 +19,7 @@ public final class GdeltParser {
      * Column positions are taken from GDELT's event schema:
      *  0 = GLOBALEVENTID
      *  1 = SQLDATE
+     * 59 = DATEADDED (UTC timestamp in yyyyMMddHHmmss)
      *  6 = Actor1Name
      * 16 = Actor2Name
      * 26 = EventCode
@@ -35,13 +36,14 @@ public final class GdeltParser {
         List<GdeltEvent> events = new ArrayList<>();
         try (CSVParser parser = new CSVParser(reader, format)) {
             for (CSVRecord record : parser) {
-                if (record.size() <= 57) {
+                if (record.size() <= 59) {
                     continue;
                 }
 
                 events.add(new GdeltEvent(
                         record.get(0),
                         record.get(1),
+                        record.get(59),
                         record.get(6),
                         record.get(16),
                         record.get(26),

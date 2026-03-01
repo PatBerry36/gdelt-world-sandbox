@@ -17,6 +17,10 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -34,6 +38,8 @@ import java.util.zip.ZipInputStream;
 public class GdeltRealtimeConnector {
     private static final URI LAST_UPDATE_URI = URI.create("http://data.gdeltproject.org/gdeltv2/lastupdate.txt");
     private static final Duration HTTP_TIMEOUT = Duration.ofSeconds(30);
+    private static final DateTimeFormatter GDELT_DATE_ADDED_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+    private static final DateTimeFormatter OUTPUT_DATE_FORMAT = DateTimeFormatter.ofPattern("dd-MM-yy HH:mm:ss");
 
     private final HttpClient client;
     private final Set<String> processedFiles;
@@ -141,14 +147,28 @@ public class GdeltRealtimeConnector {
         System.out.printf(Locale.ROOT, "Parsed %,d events.%n", events.size());
         for (GdeltEvent event : events) {
             System.out.printf(Locale.ROOT,
-                    "id=%s date=%s actor1=%s actor2=%s code=%s tone=%s url=%s%n",
+                    "id=%s time=%s actor1=%s actor2=%s code=%s tone=%s url=%s%n",
                     event.globalEventId(),
-                    event.sqlDate(),
+                    formatEventTimestampUtc(event),
                     sanitize(event.actor1Name()),
                     sanitize(event.actor2Name()),
                     event.eventCode(),
                     event.avgTone(),
                     sanitize(event.sourceUrl()));
+        }
+    }
+
+
+    private static String formatEventTimestampUtc(GdeltEvent event) {
+        if (event.dateAdded() == null || event.dateAdded().isBlank()) {
+            return "-";
+        }
+
+        try {
+            LocalDateTime timestamp = LocalDateTime.parse(event.dateAdded(), GDELT_DATE_ADDED_FORMAT);
+            return timestamp.atOffset(ZoneOffset.UTC).format(OUTPUT_DATE_FORMAT) + " UTC";
+        } catch (DateTimeParseException ex) {
+            return "-";
         }
     }
 
