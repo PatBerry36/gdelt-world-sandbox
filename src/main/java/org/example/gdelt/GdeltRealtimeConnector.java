@@ -32,7 +32,7 @@ import java.util.zip.ZipInputStream;
 @SpringBootApplication
 @EnableScheduling
 public class GdeltRealtimeConnector {
-    private static final URI LAST_UPDATE_URI = URI.create("https://data.gdeltproject.org/gdeltv2/lastupdate.txt");
+    private static final URI LAST_UPDATE_URI = URI.create("http://data.gdeltproject.org/gdeltv2/lastupdate.txt");
     private static final Duration HTTP_TIMEOUT = Duration.ofSeconds(30);
 
     private final HttpClient client;
@@ -75,7 +75,7 @@ public class GdeltRealtimeConnector {
             return;
         }
 
-        URI zipUri = URI.create("https://data.gdeltproject.org" + zipPath);
+        URI zipUri = URI.create(zipPath);
         System.out.printf(Locale.ROOT,
                 "[%s] New event batch (poll every %ds): %s%n",
                 Instant.now(),
