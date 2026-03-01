@@ -8,7 +8,7 @@
     body {
       margin: 0;
       font-family: Arial, sans-serif;
-      background: radial-gradient(circle at top, #1d2a45, #060b15 65%);
+      background: #000;
       color: #e5eefc;
       overflow: hidden;
     }
@@ -45,53 +45,32 @@
   <div id="globeViz"></div>
   <aside id="sidebar">
     <h2>Live GDELT Events</h2>
-    <p class="muted">Rotatable wireframe globe with country/continent outlines and incoming event markers.</p>
+    <p class="muted">Realtime geopolitical events streamed from GDELT 2.0.</p>
     <div id="status">Connecting…</div>
     <hr />
     <div id="events"></div>
   </aside>
 </div>
 
-<script src="https://unpkg.com/three/build/three.min.js"></script>
 <script src="https://unpkg.com/globe.gl"></script>
 <script>
-(async function () {
-  const countryGeoJson = await fetch('https://unpkg.com/world-atlas@2/countries-110m.json')
-    .then(r => r.json())
-    .then(topology => window.topojson.feature(topology, topology.objects.countries));
-
-  const continentGeoJson = await fetch('https://raw.githubusercontent.com/datasets/geo-continent/master/data/continents.geojson')
-    .then(r => r.json());
-
+(function () {
   const globe = Globe()(document.getElementById('globeViz'))
-    .backgroundColor('rgba(0,0,0,0)')
-    .showGlobe(false)
-    .showAtmosphere(false)
-    .polygonsData(countryGeoJson.features)
-    .polygonAltitude(0.002)
-    .polygonCapColor(() => 'rgba(0,0,0,0)')
-    .polygonSideColor(() => 'rgba(80,160,255,0.20)')
-    .polygonStrokeColor(() => 'rgba(140,200,255,0.75)')
-    .polygonLabel(f => `Country: ${f.properties.name || '-'}`)
-    .ringsData([])
-    .ringColor(() => t => `rgba(255,125,65,${1 - t})`)
-    .ringMaxRadius(2)
-    .ringPropagationSpeed(2)
-    .ringRepeatPeriod(1200)
+    .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-night.jpg')
+    .backgroundImageUrl('https://unpkg.com/three-globe/example/img/night-sky.png')
     .pointsData([])
     .pointColor(() => '#ff7d41')
     .pointAltitude(0.015)
     .pointRadius(0.14)
-    .pointLabel(d => `${d.actor1Name} → ${d.actor2Name}<br/>${d.timestampUtc}<br/>code=${d.eventCode}`);
+    .pointLabel(d => `${d.actor1Name} → ${d.actor2Name}<br/>${d.timestampUtc}<br/>code=${d.eventCode}`)
+    .ringsData([])
+    .ringColor(() => t => `rgba(255,125,65,${1 - t})`)
+    .ringMaxRadius(2)
+    .ringPropagationSpeed(2)
+    .ringRepeatPeriod(1200);
 
   globe.controls().autoRotate = true;
   globe.controls().autoRotateSpeed = 0.35;
-
-  const continentLines = continentGeoJson.features.map(feature => ({
-    ...feature,
-    properties: { name: feature.properties.CONTINENT || feature.properties.continent || 'Continent' }
-  }));
-  globe.polygonsData([...countryGeoJson.features, ...continentLines]);
 
   const points = [];
   const rings = [];
@@ -105,24 +84,12 @@
 
   source.addEventListener('event', (msg) => {
     const event = JSON.parse(msg.data);
-    points.unshift({
-      lat: event.latitude,
-      lng: event.longitude,
-      ...event
-    });
 
-    rings.unshift({
-      lat: event.latitude,
-      lng: event.longitude,
-      maxR: 2
-    });
+    points.unshift({ lat: event.latitude, lng: event.longitude, ...event });
+    rings.unshift({ lat: event.latitude, lng: event.longitude, maxR: 2 });
 
-    if (points.length > maxMarkers) {
-      points.length = maxMarkers;
-    }
-    if (rings.length > maxMarkers) {
-      rings.length = maxMarkers;
-    }
+    if (points.length > maxMarkers) points.length = maxMarkers;
+    if (rings.length > maxMarkers) rings.length = maxMarkers;
 
     globe.pointsData(points);
     globe.ringsData(rings);
