@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GDELT Realtime Globe</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: radial-gradient(circle at top, #1d2a45, #060b15 65%);
+      color: #e5eefc;
+      overflow: hidden;
+    }
+    #app {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      height: 100vh;
+    }
+    #globeViz {
+      width: 100%;
+      height: 100%;
+      cursor: grab;
+    }
+    #sidebar {
+      border-left: 1px solid rgba(255, 255, 255, 0.15);
+      background: rgba(6, 11, 21, 0.85);
+      padding: 1rem;
+      overflow-y: auto;
+    }
+    .event {
+      border: 1px solid rgba(173, 216, 255, 0.22);
+      border-radius: 8px;
+      padding: 0.6rem;
+      margin-bottom: 0.5rem;
+      font-size: 0.85rem;
+      line-height: 1.3;
+      background: rgba(24, 35, 60, 0.6);
+    }
+    .muted { color: #9eb0cf; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div id="globeViz"></div>
+  <aside id="sidebar">
+    <h2>Live GDELT Events</h2>
+    <p class="muted">Rotatable wireframe globe with country/continent outlines and incoming event markers.</p>
+    <div id="status">Connecting…</div>
+    <hr />
+    <div id="events"></div>
+  </aside>
+</div>
+
+<script src="https://unpkg.com/three/build/three.min.js"></script>
+<script src="https://unpkg.com/globe.gl"></script>
+<script>
+(async function () {
+  const countryGeoJson = await fetch('https://unpkg.com/world-atlas@2/countries-110m.json')
+    .then(r => r.json())
+    .then(topology => window.topojson.feature(topology, topology.objects.countries));
+
+  const continentGeoJson = await fetch('https://raw.githubusercontent.com/datasets/geo-continent/master/data/continents.geojson')
+    .then(r => r.json());
+
+  const globe = Globe()(document.getElementById('globeViz'))
+    .backgroundColor('rgba(0,0,0,0)')
+    .showGlobe(false)
+    .showAtmosphere(false)
+    .polygonsData(countryGeoJson.features)
+    .polygonAltitude(0.002)
+    .polygonCapColor(() => 'rgba(0,0,0,0)')
+    .polygonSideColor(() => 'rgba(80,160,255,0.20)')
+    .polygonStrokeColor(() => 'rgba(140,200,255,0.75)')
+    .polygonLabel(f => `Country: ${f.properties.name || '-'}`)
+    .ringsData([])
+    .ringColor(() => t => `rgba(255,125,65,${1 - t})`)
+    .ringMaxRadius(2)
+    .ringPropagationSpeed(2)
+    .ringRepeatPeriod(1200)
+    .pointsData([])
+    .pointColor(() => '#ff7d41')
+    .pointAltitude(0.015)
+    .pointRadius(0.14)
+    .pointLabel(d => `${d.actor1Name} → ${d.actor2Name}<br/>${d.timestampUtc}<br/>code=${d.eventCode}`);
+
+  globe.controls().autoRotate = true;
+  globe.controls().autoRotateSpeed = 0.35;
+
+  const continentLines = continentGeoJson.features.map(feature => ({
+    ...feature,
+    properties: { name: feature.properties.CONTINENT || feature.properties.continent || 'Continent' }
+  }));
+  globe.polygonsData([...countryGeoJson.features, ...continentLines]);
+
+  const points = [];
+  const rings = [];
+  const maxMarkers = 600;
+  const eventsPanel = document.getElementById('events');
+  const status = document.getElementById('status');
+
+  const source = new EventSource('/api/events/stream');
+  source.onopen = () => status.textContent = 'Connected';
+  source.onerror = () => status.textContent = 'Disconnected (retrying...)';
+
+  source.addEventListener('event', (msg) => {
+    const event = JSON.parse(msg.data);
+    points.unshift({
+      lat: event.latitude,
+      lng: event.longitude,
+      ...event
+    });
+
+    rings.unshift({
+      lat: event.latitude,
+      lng: event.longitude,
+      maxR: 2
+    });
+
+    if (points.length > maxMarkers) {
+      points.length = maxMarkers;
+    }
+    if (rings.length > maxMarkers) {
+      rings.length = maxMarkers;
+    }
+
+    globe.pointsData(points);
+    globe.ringsData(rings);
+
+    const row = document.createElement('div');
+    row.className = 'event';
+    row.innerHTML = `<strong>${event.actor1Name}</strong> → <strong>${event.actor2Name}</strong><br/>` +
+      `<span class="muted">${event.timestampUtc}</span><br/>` +
+      `code=${event.eventCode}, tone=${event.avgTone}<br/>` +
+      `<span class="muted">lat=${event.latitude.toFixed(3)}, lon=${event.longitude.toFixed(3)}</span>`;
+
+    eventsPanel.prepend(row);
+    while (eventsPanel.children.length > 40) {
+      eventsPanel.removeChild(eventsPanel.lastChild);
+    }
+  });
+})();
+</script>
+</body>
+</html>
