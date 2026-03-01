@@ -1,5 +1,11 @@
 package org.example.gdelt;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.scheduling.annotation.Scheduled;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -11,28 +17,31 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 /**
- * Polls GDELT's "lastupdate.txt" endpoint and streams events from each newly published
- * 15-minute events zip file.
+ * Spring Boot app that polls GDELT's "lastupdate.txt" endpoint and streams
+ * events from each newly published 15-minute events zip file.
  */
-public final class GdeltRealtimeConnector {
+@SpringBootApplication
+@EnableScheduling
+public class GdeltRealtimeConnector {
     private static final URI LAST_UPDATE_URI = URI.create("https://data.gdeltproject.org/gdeltv2/lastupdate.txt");
     private static final Duration HTTP_TIMEOUT = Duration.ofSeconds(30);
 
     private final HttpClient client;
     private final Set<String> processedFiles;
 
-    private GdeltRealtimeConnector() {
+    @Value("${gdelt.poll-interval-seconds:60}")
+    private long pollIntervalSeconds;
+
+    public GdeltRealtimeConnector() {
         this.client = HttpClient.newBuilder()
                 .connectTimeout(HTTP_TIMEOUT)
                 .build();
@@ -40,22 +49,12 @@ public final class GdeltRealtimeConnector {
     }
 
     public static void main(String[] args) {
-        long pollSeconds = args.length > 0 ? Long.parseLong(args[0]) : 60;
-        GdeltRealtimeConnector connector = new GdeltRealtimeConnector();
-        connector.start(pollSeconds);
+        SpringApplication.run(GdeltRealtimeConnector.class, args);
     }
 
-    private void start(long pollSeconds) {
-        System.out.printf(Locale.ROOT,
-                "Starting GDELT near-realtime poller (interval=%ds).%n", pollSeconds);
-
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-        scheduler.scheduleAtFixedRate(this::safePoll, 0, pollSeconds, TimeUnit.SECONDS);
-
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            System.out.println("Stopping connector...");
-            scheduler.shutdown();
-        }));
+    @Scheduled(initialDelayString = "1000", fixedDelayString = "#{${gdelt.poll-interval-seconds:60} * 1000}")
+    public void scheduledPoll() {
+        safePoll();
     }
 
     private void safePoll() {
@@ -67,14 +66,8 @@ public final class GdeltRealtimeConnector {
     }
 
     void pollOnce() throws IOException, InterruptedException {
-        String line = fetchLastUpdateLine();
-        String[] tokens = line.split("\\s+");
-        if (tokens.length < 3) {
-            throw new IOException("Unexpected lastupdate.txt format: " + line);
-        }
-
-        String zipPath = tokens[2].trim();
-        if (!zipPath.endsWith(".export.CSV.zip")) {
+        String zipPath = fetchLatestExportZipPath();
+        if (zipPath == null) {
             return;
         }
 
@@ -83,12 +76,17 @@ public final class GdeltRealtimeConnector {
         }
 
         URI zipUri = URI.create("https://data.gdeltproject.org" + zipPath);
-        System.out.printf(Locale.ROOT, "[%s] New event batch: %s%n", Instant.now(), zipUri);
+        System.out.printf(Locale.ROOT,
+                "[%s] New event batch (poll every %ds): %s%n",
+                Instant.now(),
+                pollIntervalSeconds,
+                zipUri);
+
         List<GdeltEvent> events = downloadAndParseEvents(zipUri);
         printEvents(events);
     }
 
-    private String fetchLastUpdateLine() throws IOException, InterruptedException {
+    private String fetchLatestExportZipPath() throws IOException, InterruptedException {
         HttpRequest request = HttpRequest.newBuilder(LAST_UPDATE_URI)
                 .GET()
                 .timeout(HTTP_TIMEOUT)
@@ -99,11 +97,21 @@ public final class GdeltRealtimeConnector {
             throw new IOException("lastupdate fetch failed with HTTP " + response.statusCode());
         }
 
-        String first = response.body().lines().findFirst().orElse("").trim();
-        if (first.isBlank()) {
-            throw new IOException("lastupdate.txt returned empty body");
+        return Arrays.stream(response.body().split("\\R"))
+                .map(String::trim)
+                .filter(line -> !line.isBlank())
+                .map(this::extractPath)
+                .filter(path -> path != null && path.endsWith(".export.CSV.zip"))
+                .findFirst()
+                .orElseThrow(() -> new IOException("No events export path found in lastupdate.txt"));
+    }
+
+    private String extractPath(String line) {
+        String[] tokens = line.split("\\s+");
+        if (tokens.length < 3) {
+            return null;
         }
-        return first;
+        return tokens[2].trim();
     }
 
     private List<GdeltEvent> downloadAndParseEvents(URI zipUri) throws IOException, InterruptedException {
