@@ -14,7 +14,7 @@ public final class GdeltParser {
     }
 
     /**
-     * Parses rows from GDELT 2.0 "events" feed where fields are tab-delimited.
+     * Parses rows from GDELT 3 "events" feed where fields are tab-delimited.
      *
      * Column positions are taken from GDELT's event schema:
      *  0 = GLOBALEVENTID
