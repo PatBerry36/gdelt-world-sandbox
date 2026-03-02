@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GDELT Realtime Globe</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #000;
+      color: #e5eefc;
+      overflow: hidden;
+    }
+    #globeViz {
+      position: fixed;
+      inset: 0;
+      cursor: grab;
+    }
+    #sidebar {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: 300px;
+      height: 100vh;
+      border-left: 1px solid rgba(255, 255, 255, 0.15);
+      background: rgba(6, 11, 21, 0.85);
+      padding: 1rem;
+      overflow-y: auto;
+      z-index: 10;
+      box-sizing: border-box;
+    }
+    .event {
+      border: 1px solid rgba(173, 216, 255, 0.22);
+      border-radius: 8px;
+      padding: 0.6rem;
+      margin-bottom: 0.5rem;
+      font-size: 0.85rem;
+      line-height: 1.3;
+      background: rgba(24, 35, 60, 0.6);
+    }
+    .muted { color: #9eb0cf; }
+    #rotateBtn {
+      margin-top: 0.5rem;
+      padding: 0.35rem 0.75rem;
+      background: rgba(255, 125, 65, 0.15);
+      border: 1px solid rgba(255, 125, 65, 0.5);
+      border-radius: 6px;
+      color: #ff7d41;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    #rotateBtn:hover { background: rgba(255, 125, 65, 0.28); }
+  </style>
+</head>
+<body>
+<div id="globeViz"></div>
+<aside id="sidebar">
+    <h2>Live GDELT Events</h2>
+    <p class="muted">Realtime geopolitical events streamed from GDELT 2.0.</p>
+    <div id="status">Connecting…</div>
+    <button id="rotateBtn">Pause rotation</button>
+    <hr />
+    <div id="events"></div>
+  </aside>
+
+<script src="https://unpkg.com/globe.gl"></script>
+<script>
+(function () {
+  const globe = Globe()(document.getElementById('globeViz'))
+    .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-night.jpg')
+    .pointsData([])
+    .pointColor(() => '#ff7d41')
+    .pointAltitude(0.015)
+    .pointRadius(0.14)
+    .pointLabel(d => `${d.actor1Name} → ${d.actor2Name}<br/>${d.timestampUtc}<br/>code=${d.eventCode}`)
+    .ringsData([])
+    .ringColor(() => t => `rgba(255,125,65,${1 - t})`)
+    .ringMaxRadius(2)
+    .ringPropagationSpeed(2)
+    .ringRepeatPeriod(1200);
+
+  globe.controls().autoRotate = true;
+  globe.controls().autoRotateSpeed = 0.35;
+
+  const rotateBtn = document.getElementById('rotateBtn');
+  rotateBtn.addEventListener('click', () => {
+    const rotating = !globe.controls().autoRotate;
+    globe.controls().autoRotate = rotating;
+    rotateBtn.textContent = rotating ? 'Pause rotation' : 'Resume rotation';
+  });
+
+  const points = [];
+  const rings = [];
+  const maxMarkers = 600;
+  const eventsPanel = document.getElementById('events');
+  const status = document.getElementById('status');
+
+  const source = new EventSource('/api/events/stream');
+  source.onopen = () => status.textContent = 'Connected';
+  source.onerror = () => status.textContent = 'Disconnected (retrying...)';
+
+  source.addEventListener('event', (msg) => {
+    const event = JSON.parse(msg.data);
+
+    points.unshift({ lat: event.latitude, lng: event.longitude, ...event });
+    rings.unshift({ lat: event.latitude, lng: event.longitude, maxR: 2 });
+
+    if (points.length > maxMarkers) points.length = maxMarkers;
+    if (rings.length > maxMarkers) rings.length = maxMarkers;
+
+    globe.pointsData(points);
+    globe.ringsData(rings);
+
+    const row = document.createElement('div');
+    row.className = 'event';
+    row.innerHTML = `<strong>${event.actor1Name}</strong> → <strong>${event.actor2Name}</strong><br/>` +
+      `<span class="muted">${event.timestampUtc}</span><br/>` +
+      `code=${event.eventCode}, tone=${event.avgTone}<br/>` +
+      `<span class="muted">lat=${event.latitude.toFixed(3)}, lon=${event.longitude.toFixed(3)}</span>`;
+
+    eventsPanel.prepend(row);
+    while (eventsPanel.children.length > 40) {
+      eventsPanel.removeChild(eventsPanel.lastChild);
+    }
+  });
+})();
+</script>
+</body>
+</html>

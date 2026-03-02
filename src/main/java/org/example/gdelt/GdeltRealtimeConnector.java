@@ -43,11 +43,13 @@ public class GdeltRealtimeConnector {
 
     private final HttpClient client;
     private final Set<String> processedFiles;
+    private final GdeltEventPublisher eventPublisher;
 
     @Value("${gdelt.poll-interval-seconds:60}")
     private long pollIntervalSeconds;
 
-    public GdeltRealtimeConnector() {
+    public GdeltRealtimeConnector(GdeltEventPublisher eventPublisher) {
+        this.eventPublisher = eventPublisher;
         this.client = HttpClient.newBuilder()
                 .connectTimeout(HTTP_TIMEOUT)
                 .build();
@@ -90,6 +92,7 @@ public class GdeltRealtimeConnector {
 
         List<GdeltEvent> events = downloadAndParseEvents(zipUri);
         printEvents(events);
+        publishEvents(events);
     }
 
     private String fetchLatestExportZipPath() throws IOException, InterruptedException {
@@ -147,17 +150,38 @@ public class GdeltRealtimeConnector {
         System.out.printf(Locale.ROOT, "Parsed %,d events.%n", events.size());
         for (GdeltEvent event : events) {
             System.out.printf(Locale.ROOT,
-                    "id=%s time=%s actor1=%s actor2=%s code=%s tone=%s url=%s%n",
+                    "id=%s time=%s actor1=%s actor2=%s code=%s tone=%s lat=%s lon=%s url=%s%n",
                     event.globalEventId(),
                     formatEventTimestampUtc(event),
                     sanitize(event.actor1Name()),
                     sanitize(event.actor2Name()),
                     event.eventCode(),
                     event.avgTone(),
+                    event.latitude(),
+                    event.longitude(),
                     sanitize(event.sourceUrl()));
         }
     }
 
+    private void publishEvents(List<GdeltEvent> events) {
+        for (GdeltEvent event : events) {
+            if (event.latitude() == null || event.longitude() == null) {
+                continue;
+            }
+
+            eventPublisher.publish(new GdeltEventMarker(
+                    event.globalEventId(),
+                    formatEventTimestampUtc(event),
+                    sanitize(event.actor1Name()),
+                    sanitize(event.actor2Name()),
+                    event.eventCode(),
+                    event.avgTone(),
+                    event.latitude(),
+                    event.longitude(),
+                    sanitize(event.sourceUrl())
+            ));
+        }
+    }
 
     private static String formatEventTimestampUtc(GdeltEvent event) {
         if (event.dateAdded() == null || event.dateAdded().isBlank()) {
