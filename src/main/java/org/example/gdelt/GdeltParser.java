@@ -21,6 +21,8 @@ public final class GdeltParser {
      * Column positions are taken from GDELT's event schema (0-indexed):
      *  0 = GLOBALEVENTID
      *  1 = SQLDATE
+     * 31 = NumMentions
+     * 32 = NumSources
      * 56 = ActionGeo_Lat
      * 57 = ActionGeo_Long
      * 59 = DATEADDED (UTC timestamp in yyyyMMddHHmmss)
@@ -48,6 +50,8 @@ public final class GdeltParser {
                         record.get(16),
                         record.get(26),
                         record.get(34),
+                        parseInteger(record.get(31)),
+                        parseInteger(record.get(32)),
                         parseCoordinate(record.get(56)),
                         parseCoordinate(record.get(57)),
                         record.get(60)
@@ -56,6 +60,17 @@ public final class GdeltParser {
         }
 
         return events;
+    }
+
+    private static int parseInteger(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return 0;
+        }
+        try {
+            return Integer.parseInt(raw);
+        } catch (NumberFormatException ex) {
+            return 0;
+        }
     }
 
     private static Double parseCoordinate(String raw) {

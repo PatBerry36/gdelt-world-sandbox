@@ -176,6 +176,8 @@ public class GdeltRealtimeConnector {
                     sanitize(event.actor2Name()),
                     event.eventCode(),
                     event.avgTone(),
+                    event.numMentions(),
+                    event.numSources(),
                     event.latitude(),
                     event.longitude(),
                     sanitize(event.sourceUrl())

@@ -11,6 +11,8 @@ public record GdeltEvent(
         String actor2Name,
         String eventCode,
         String avgTone,
+        int numMentions,
+        int numSources,
         Double latitude,
         Double longitude,
         String sourceUrl

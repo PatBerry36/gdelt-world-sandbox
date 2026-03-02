@@ -7,6 +7,8 @@ public record GdeltEventMarker(
         String actor2Name,
         String eventCode,
         String avgTone,
+        int numMentions,
+        int numSources,
         double latitude,
         double longitude,
         String sourceUrl

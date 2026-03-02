@@ -93,8 +93,28 @@
   const points = [];
   const rings = [];
   const maxMarkers = 600;
+  const topEvents = [];
   const eventsPanel = document.getElementById('events');
   const status = document.getElementById('status');
+
+  let renderTimer = null;
+  function scheduleRender() {
+    clearTimeout(renderTimer);
+    renderTimer = setTimeout(() => {
+      topEvents.sort((a, b) => b.numMentions - a.numMentions || b.numSources - a.numSources);
+      topEvents.splice(40);
+      eventsPanel.innerHTML = '';
+      for (const ev of topEvents) {
+        const row = document.createElement('div');
+        row.className = 'event';
+        row.innerHTML = `<strong>${ev.actor1Name}</strong> → <strong>${ev.actor2Name}</strong><br/>` +
+          `<span class="muted">${ev.timestampUtc}</span><br/>` +
+          `code=${ev.eventCode}, tone=${ev.avgTone}, mentions=${ev.numMentions}<br/>` +
+          `<span class="muted">lat=${ev.latitude.toFixed(3)}, lon=${ev.longitude.toFixed(3)}</span>`;
+        eventsPanel.appendChild(row);
+      }
+    }, 300);
+  }
 
   const source = new EventSource('/api/events/stream');
   source.onopen = () => status.textContent = 'Connected';
@@ -112,17 +132,8 @@
     globe.pointsData(points);
     globe.ringsData(rings);
 
-    const row = document.createElement('div');
-    row.className = 'event';
-    row.innerHTML = `<strong>${event.actor1Name}</strong> → <strong>${event.actor2Name}</strong><br/>` +
-      `<span class="muted">${event.timestampUtc}</span><br/>` +
-      `code=${event.eventCode}, tone=${event.avgTone}<br/>` +
-      `<span class="muted">lat=${event.latitude.toFixed(3)}, lon=${event.longitude.toFixed(3)}</span>`;
-
-    eventsPanel.prepend(row);
-    while (eventsPanel.children.length > 40) {
-      eventsPanel.removeChild(eventsPanel.lastChild);
-    }
+    topEvents.push(event);
+    scheduleRender();
   });
 })();
 </script>
