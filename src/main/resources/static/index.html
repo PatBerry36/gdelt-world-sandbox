@@ -73,12 +73,14 @@
   </aside>
 
 <script src="https://unpkg.com/globe.gl"></script>
+<script src="https://unpkg.com/topojson-client@3"></script>
 <script>
 (function () {
   const globeEl = document.getElementById('globeViz');
   const globe = Globe()(globeEl)
     .width(globeEl.offsetWidth)
     .height(globeEl.offsetHeight)
+    .backgroundColor('#000000')
     .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-night.jpg')
     .pointsData([])
     .pointColor(() => '#ff7d41')
@@ -89,10 +91,30 @@
     .ringColor(() => t => `rgba(255,125,65,${1 - t})`)
     .ringMaxRadius(2)
     .ringPropagationSpeed(2)
-    .ringRepeatPeriod(1200);
+    .ringRepeatPeriod(1200)
+    .polygonsData([])
+    .polygonAltitude(0.002)
+    .polygonStrokeColor(f => f.__layer === 'continent' ? 'rgba(79, 166, 255, 0.6)' : 'rgba(200, 225, 255, 0.28)')
+    .polygonCapColor(f => f.__layer === 'continent' ? 'rgba(79, 166, 255, 0.045)' : 'rgba(0, 0, 0, 0)');
+
+  Promise.all([
+    fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json').then(r => r.json()),
+    fetch('https://raw.githubusercontent.com/datasets/geo-continent/master/data/continents.geojson').then(r => r.json())
+  ]).then(([countriesTopo, continentsGeo]) => {
+    const countries = topojson.feature(countriesTopo, countriesTopo.objects.countries).features
+      .map(feature => ({ ...feature, __layer: 'country' }));
+    const continents = continentsGeo.features.map(feature => ({ ...feature, __layer: 'continent' }));
+    globe.polygonsData([...countries, ...continents]);
+  }).catch(() => {
+    // If outline datasets fail to load, keep event streaming and globe rendering online.
+  });
 
   globe.controls().autoRotate = true;
   globe.controls().autoRotateSpeed = 0.35;
+
+  window.addEventListener('resize', () => {
+    globe.width(globeEl.offsetWidth).height(globeEl.offsetHeight);
+  });
 
   const rotateBtn = document.getElementById('rotateBtn');
   rotateBtn.addEventListener('click', () => {
@@ -109,8 +131,6 @@
   const sidebar = document.getElementById('sidebar');
   const status = document.getElementById('status');
 
-  // Single delegated listener on sidebar — we know sidebar receives pointer events
-  // because the Pause button works. Use closest() to find the card from any child element.
   let hoveredCard = null;
 
   sidebar.addEventListener('mouseover', e => {
